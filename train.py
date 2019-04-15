@@ -5,13 +5,6 @@ import argparse
 from tqdm import tqdm
 
 
-def compute_loss(result, y, vocab_size):
-    result = result.contiguous().view(-1, vocab_size)
-    y = y.contiguous().view(-1)
-    loss = F.cross_entropy(result, y)
-    return loss
-
-
 def valid(model, epoch, filename, config):
     if isinstance(model, torch.nn.DataParallel):
         model = model.module
@@ -28,7 +21,10 @@ def valid(model, epoch, filename, config):
             y = y.cuda()
         with torch.no_grad():
             result, _ = model.sample(x)
-            loss = compute_loss(result, y, config.vocab_size)
+            if config.ls_flag:
+                loss = LabelSmoothing(result, y, config)
+            else:
+                loss = compute_loss(result, y, config.vocab_size)
         all_loss += loss.item()
         # ##########################
         # if step == 2:
@@ -55,7 +51,10 @@ def test(model, epoch, tokenizer, config):
             y = y.cuda()
         with torch.no_grad():
             out, idx = model.sample(x)
-            loss = compute_loss(out, y, config.vocab_size)
+            if config.ls_flag:
+                loss = LabelSmoothing(out, y, config)
+            else:
+                loss = compute_loss(out, y, config.vocab_size)
         all_loss += loss.item()
 
         for i in range(idx.shape[0]):
@@ -64,6 +63,7 @@ def test(model, epoch, tokenizer, config):
                 if i == config.eos:
                     break
                 temp.append(i)
+            # print(temp)
             sen = tokenizer.convert_ids_to_tokens(temp)
             result.append(' '.join(sen))
         # ##########################
@@ -98,7 +98,9 @@ def test(model, epoch, tokenizer, config):
 
 
 def train(model, args, config, tokenizer):
-    optim = torch.optim.Adam(model.parameters(), lr=config.LR)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-9)
+    optim = Optim(optimizer, config)
+    # optim = torch.optim.Adam(model.parameters(), lr=config.LR)
 
     # data
     train_loader = data_load(config.filename_trimmed_train, config.batch_size, True)
@@ -122,18 +124,29 @@ def train(model, args, config, tokenizer):
                 x = x.cuda()
                 y = y.cuda()
             result = model(x, y)
-            loss = compute_loss(result, y, config.vocab_size)
-
-            optim.zero_grad()
-            loss.backward()
-            optim.step()
-
-            all_loss += loss.item()
+            if config.ls_flag:
+                loss = LabelSmoothing(result, y, config)
+            else:
+                loss = compute_loss(result, y, config.vocab_size)
             if step % 200 == 0:
                 print('epoch:', e, '|step:', step, '|train_loss: %.4f' % loss.item())
-            if step == 2:
-                break
 
+            # loss regularization
+            loss = loss / config.accumulation_steps
+            loss.backward()
+            if ((step + 1) % config.accumulation_steps) == 0:
+                optim.updata()
+                optim.zero_grad()
+
+            # optim.zero_grad()
+            # loss.backward()
+            # optim.updata()
+
+            all_loss += loss.item()
+            # ########################
+            # if step == 2:
+            #     break
+            # ########################
         # train loss
         loss = all_loss / num
         print('epoch:', e, '|train_loss: %.4f' % loss)
@@ -167,7 +180,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     ########test##########
-    # args.batch_size = 2
+    args.batch_size = 3
     #######test###########
 
     if args.batch_size:

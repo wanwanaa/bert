@@ -6,12 +6,16 @@ import torch
 def build_model(config):
     embeds = Embeds(config, config.vocab_size)
     encoder = Bert_Encoder(config)
-    if config.attn_flag:
-        attention = Luong_Attention(config)
+    if config.decoder == 'lstm':
+        if config.attn_flag:
+            attention = Luong_Attention(config)
+        else:
+            attention = None
+        decoder = Decoder_LSTM(attention, config)
+        model = Model_Lstm(embeds, encoder, decoder, config)
     else:
-        attention = None
-    decoder = Decoder_LSTM(embeds, attention, config)
-    model = Model(encoder, decoder, config)
+        decoder = Decoder_Transformer(config)
+        model = Model_Transformer(embeds, encoder, decoder, config)
     return model
 
 

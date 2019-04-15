@@ -5,18 +5,18 @@ import torch.nn as nn
 class Luong_Attention(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.hidden_size = config.hidden_size
+        self.hidden_size = config.model_size
         self.n_layer = config.n_layer
 
         self.linear_in = nn.Sequential(
-            nn.Linear(config.hidden_size, config.hidden_size),
+            nn.Linear(config.model_size, config.model_size),
             nn.SELU(),
-            nn.Linear(config.hidden_size, config.hidden_size)
+            nn.Linear(config.model_size, config.model_size)
         )
         self.linear_out = nn.Sequential(
-            nn.Linear(config.hidden_size*2, config.hidden_size),
+            nn.Linear(config.model_size*2, config.model_size),
             nn.SELU(),
-            nn.Linear(config.hidden_size, config.hidden_size)
+            nn.Linear(config.model_size, config.model_size)
         )
         self.softmax = nn.Softmax(dim=-1)
 

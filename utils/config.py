@@ -11,8 +11,8 @@ class Config():
         self.filename_tgt_test = 'DATA/raw_data/tgt-test.txt'
 
         # trimmed data
-        self.filename_trimmed_train = 'DATA/data/train.pt'
-        self.filename_trimmed_valid = 'DATA/data/valid.pt'
+        self.filename_trimmed_train = 'DATA/data/test.pt'
+        self.filename_trimmed_valid = 'DATA/data/test.pt'
         self.filename_trimmed_test = 'DATA/data/test.pt'
 
         self.t_len = 150
@@ -32,15 +32,18 @@ class Config():
         self.filename_gold = 'result/gold/gold_summaries.txt'
 
         # Hyper Parameters
-        self.LR = 0.0003
+        self.LR = 0.003
         self.batch_size = 64
         self.iters = 10000
-        self.embedding_dim = 768
-        self.hidden_size = 768
-        self.beam_size = 10
+        self.model_size = 768
+        self.n_head = 12
+        self.d_ff = 1024
+        self.accumulation_steps = 8
+        self.warmup_steps = 4000
+        self.ls_flag = True
+        self.ls = 0.1
 
-        self.n_layer = 2
-        self.cell = 'lstm'
+        self.n_layer = 12 # lstm or transformer
         self.attn_flag = True
         self.dropout = 0
         self.bidirectional = True
@@ -49,4 +52,9 @@ class Config():
         self.bert = True
         self.fine_tuning = False
         self.vocab_size = 21128 # BertModel.config.vocab_size
+
+        self.decoder = 'transformer'
+
+        self.beam_size = 10
+
 

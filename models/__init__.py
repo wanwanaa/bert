@@ -6,3 +6,7 @@ from models.model import *
 from models.save_load import *
 from models.rouge import *
 from models.attention import *
+from models.suberlayer import *
+from models.transformer_helper import *
+from models.loss import *
+from models.optimizer import *

@@ -5,7 +5,7 @@ class Embeds(nn.Module):
     def __init__(self, config, vocab_size, embedding=None):
         super().__init__()
         self.vocab_size = vocab_size
-        self.embedding_dim = config.embedding_dim
+        self.embedding_dim = config.model_size
         if embedding:
             self.embeds = nn.Embedding.from_pretrained(embedding)
         else:
