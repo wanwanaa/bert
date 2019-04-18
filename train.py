@@ -98,7 +98,7 @@ def test(model, epoch, tokenizer, config):
 
 
 def train(model, args, config, tokenizer):
-    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), eps=1e-9)
+    optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.999), eps=1e-9)
     optim = Optim(optimizer, config)
     # optim = torch.optim.Adam(model.parameters(), lr=config.LR)
 
@@ -128,24 +128,40 @@ def train(model, args, config, tokenizer):
                 loss = LabelSmoothing(result, y, config)
             else:
                 loss = compute_loss(result, y, config.vocab_size)
+            result = torch.argmax(result[0], dim=-1)
+            if torch.cuda.is_available():
+                result = list(result.cpu().numpy())
+            else:
+                result = list(result.numpy())
+            print(result)
+            result = tokenizer.convert_ids_to_tokens(result)
+            print(result)
             if step % 200 == 0:
+                result = torch.argmax(result[0], dim=-1)
+                if torch.cuda.is_available():
+                    result = list(result.cpu().numpy())
+                else:
+                    result = list(result.numpy())
+                result = tokenizer.convert_ids_to_tokens(result)
+                print(result)
                 print('epoch:', e, '|step:', step, '|train_loss: %.4f' % loss.item())
+                test(model, e, tokenizer, config)
 
-            # loss regularization
-            loss = loss / config.accumulation_steps
-            loss.backward()
-            if ((step + 1) % config.accumulation_steps) == 0:
-                optim.updata()
-                optim.zero_grad()
-
-            # optim.zero_grad()
+            # # loss regularization
+            # loss = loss / config.accumulation_steps
             # loss.backward()
-            # optim.updata()
+            # if ((step + 1) % config.accumulation_steps) == 0:
+            #     optim.updata()
+            #     optim.zero_grad()
+
+            optim.zero_grad()
+            loss.backward()
+            optim.updata()
 
             all_loss += loss.item()
             # ########################
-            # if step == 2:
-            #     break
+            # if step == 2000:
+            #     test(model, e, tokenizer, config)
             # ########################
         # train loss
         loss = all_loss / num
@@ -172,7 +188,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', '-b', type=int, default=64, help='batch size for train')
-    parser.add_argument('--epoch', '-e', type=int, default=20, help='number of training epochs')
+    parser.add_argument('--epoch', '-e', type=int, default=50, help='number of training epochs')
     parser.add_argument('--n_layers', '-n', type=int, default=2, help='number of gru layers')
     parser.add_argument('-seed', '-s', type=int, default=123, help="Random seed")
     parser.add_argument('--save_model', '-m', action='store_true', default=False, help="whether to save model")
@@ -180,7 +196,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     ########test##########
-    args.batch_size = 3
+    # args.batch_size = 3
     #######test###########
 
     if args.batch_size:

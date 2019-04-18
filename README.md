@@ -1,2 +1,2 @@
 # bert
-bert+LSTM
+bert+Transformer

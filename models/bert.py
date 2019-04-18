@@ -13,7 +13,8 @@ class Bert_Encoder(nn.Module):
 
     def forward(self, ids, segment_ids):
         encoded_layers, _ = self.model(ids, segment_ids)
-        encoded_layers = encoded_layers[-1] # (batch, len, 768)
+        encoded_layers = encoded_layers[-1] # (batch, len+1, 768)
+        encoded_layers = encoded_layers[:, 1:, :]
         if self.flag == 'lstm':
             code = encoded_layers[:, 0, :]
             if torch.cuda.is_available():

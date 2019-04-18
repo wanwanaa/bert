@@ -24,7 +24,7 @@ def test():
     # tgt_segment = test[0][4]
     # tgt_mask = test[0][5]
     print('src_id:', src_id)
-    print('src_segment:', tgt_id)
+    print('tgt_id:', tgt_id)
     # print('src_mask:', src_mask)
     #
     # print('tgt_id:', tgt_id)
@@ -33,5 +33,5 @@ def test():
 
 
 if __name__ == "__main__":
-    # main()
-    test()
+    main()
+    # test()

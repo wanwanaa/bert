@@ -10,6 +10,7 @@ class Model_Transformer(nn.Module):
         self.model_size = config.model_size
         self.vocab_size = config.vocab_size
         self.s_len = config.s_len
+        self.cls = config.cls
         self.bos = config.bos
         self.pad = config.pad
         self.fine_tune = config.fine_tuning
@@ -33,53 +34,79 @@ class Model_Transformer(nn.Module):
         x = torch.cat((start, x), dim=1)
         return x[:, :-1]
 
-    def sample(self, x):
+    def convert_x(self, x):
         if torch.cuda.is_available():
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.cuda.LongTensor)
+            start = (torch.ones(x.size(0), 1) * self.cls).type(torch.cuda.LongTensor)
         else:
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.LongTensor)
+            start = (torch.ones(x.size(0), 1) * self.cls).type(torch.LongTensor)
+        x = torch.cat((start, x), dim=1)
+        return x
+
+    def sample(self, x):
+        x_c = self.convert_x(x)
+        if torch.cuda.is_available():
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.cuda.LongTensor)
+        else:
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.LongTensor)
         if self.fine_tune:
-            encoder_outs, _ = self.encoder(x, segment_ids)
+            encoder_outs, _ = self.encoder(x_c, segment_ids)
         else:
             with torch.no_grad():
-                encoder_outs, _ = self.encoder(x, segment_ids)
+                encoder_outs, _ = self.encoder(x_c, segment_ids)
+
+        # start
+        start = torch.ones(x.size(0)) * self.bos
+        start = start.unsqueeze(1)
+        if torch.cuda.is_available():
+            start = start.type(torch.cuda.LongTensor)
+        else:
+            start = start.type(torch.LongTensor)
 
         y_pos = torch.arange(1, self.s_len + 1).repeat(x.size(0), 1)
+        if torch.cuda.is_available():
+            y_pos = y_pos.type(torch.cuda.LongTensor)
+        else:
+            y_pos = y_pos.type(torch.LongTensor)
         out = torch.ones(x.size(0)) * self.bos
         out = out.unsqueeze(1)
-        result = []
+        dec_output = None
         for i in range(self.s_len):
             if torch.cuda.is_available():
                 out = out.type(torch.cuda.LongTensor)
             else:
                 out = out.type(torch.LongTensor)
+            # print('out:', out.size())
+            # print('pos:', y_pos[:, :i + 1].size())
             dec_output = self.decoder(x, out, y_pos[:, :i + 1], encoder_outs)
-            gen = self.linear_out(dec_output[:, -1, :])
-            gen = torch.nn.functional.softmax(gen, -1)
-            result.append(gen)
-            gen = torch.argmax(gen, dim=1).unsqueeze(1)
-            out = torch.cat((out, gen), dim=1)
+            dec_output = self.linear_out(dec_output)
+            gen = torch.nn.functional.softmax(dec_output, -1)
+            gen = torch.argmax(gen, dim=-1)
+            out = torch.cat((start, gen), dim=1)
             # mask = gen.eq(0).squeeze()
             # if i < self.s_len - 1:
             #     y_pos[:, i + 1] = y_pos[:, i + 1].masked_fill(mask, 0)
 
-        result = torch.stack(result)
         out = out.cpu().numpy()
-        return result, out
+        return dec_output, out[:, 1:]
 
     def forward(self, x, y):
+        x_c = self.convert_x(x)
         if torch.cuda.is_available():
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.cuda.LongTensor)
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.cuda.LongTensor)
         else:
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.LongTensor)
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.LongTensor)
         if self.fine_tune:
-            encoder_outs, _ = self.encoder(x, segment_ids)
+            encoder_outs, _ = self.encoder(x_c, segment_ids)
         else:
             with torch.no_grad():
-                encoder_outs, _ = self.encoder(x, segment_ids)
+                encoder_outs, _ = self.encoder(x_c, segment_ids)
 
         y_c = self.convert(y)
         pos = torch.arange(1, self.s_len + 1).repeat(y.size(0), 1)
+        if torch.cuda.is_available():
+            pos = pos.type(torch.cuda.LongTensor)
+        else:
+            pos = pos.type(torch.LongTensor)
         dec_output = self.decoder(x, y_c, pos, encoder_outs)
         dec_output = self.linear_out(dec_output)
         return dec_output
@@ -107,20 +134,29 @@ class Model_Lstm(nn.Module):
         x = torch.cat((start, x), dim=1)
         return x[:, :-1]
 
+    def convert_x(self, x):
+        if torch.cuda.is_available():
+            start = (torch.ones(x.size(0), 1) * self.bos).type(torch.cuda.LongTensor)
+        else:
+            start = (torch.ones(x.size(0), 1) * self.bos).type(torch.LongTensor)
+        x = torch.cat((start, x), dim=1)
+        return x
+
     def output_layer(self, x):
         return self.linear_out(x)
 
     def forward(self, x, y):
+        x_c = self.convert_x(x)
         if torch.cuda.is_available():
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.cuda.LongTensor)
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.cuda.LongTensor)
         else:
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.LongTensor)
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.LongTensor)
         if self.fine_tune:
-            encoder_outs, h = self.encoder(x, segment_ids)
+            encoder_outs, h = self.encoder(x_c, segment_ids)
         else:
             with torch.no_grad():
-                encoder_outs, h = self.encoder(x, segment_ids)
-        h = h.repeat(2, 1, 1)
+                encoder_outs, h = self.encoder(x_c, segment_ids)
+        h = h.repeat(self.n_layer, 1, 1)
         h = (h, h)
 
         y_c = self.convert(y)
@@ -137,12 +173,17 @@ class Model_Lstm(nn.Module):
         return outputs
 
     def sample(self, x):
+        x_c = self.convert_x(x)
         if torch.cuda.is_available():
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.cuda.LongTensor)
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.cuda.LongTensor)
         else:
-            segment_ids = torch.ones(x.size(0), x.size(1)).type(torch.LongTensor)
-        encoder_outs, h = self.encoder(x, segment_ids)
-        h = h.repeat(2, 1, 1)
+            segment_ids = torch.zeros(x_c.size(0), x_c.size(1)).type(torch.LongTensor)
+        if self.fine_tune:
+            encoder_outs, h = self.encoder(x_c, segment_ids)
+        else:
+            with torch.no_grad():
+                encoder_outs, h = self.encoder(x_c, segment_ids)
+        h = h.repeat(self.n_layer, 1, 1)
         h = (h, h)
 
         out = torch.ones(x.size(0)) * self.bos

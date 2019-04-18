@@ -20,7 +20,7 @@ class Datasets():
         return dataset
 
 
-def get_trimmed_datasets(datasets, max_length, tokenizer, src):
+def get_trimmed_datasets(datasets, max_length, tokenizer, eos):
     data_ids = np.zeros([len(datasets), max_length])
     segment_ids = np.zeros([len(datasets), max_length])
     masks = np.zeros([len(datasets), max_length])
@@ -39,12 +39,9 @@ def get_trimmed_datasets(datasets, max_length, tokenizer, src):
         # segment_ids[i] = segment_id
 
         # word to index
-        if src:
-            line = '[CLS] ' + line + ' [SEP]'
-        else:
-            line = line + ' [SEP]'
         line = tokenizer.tokenize(line)
         line = tokenizer.convert_tokens_to_ids(line)
+        line.append(eos)
         # #########################
         # # mask
         # mask = np.ones(len(line))
@@ -68,8 +65,8 @@ def get_trimmed_datasets(datasets, max_length, tokenizer, src):
 
 
 def save_data(src_datasets, tgt_datasets, t_len, s_len, filename, tokenizer):
-    src_ids, src_segment_ids, src_masks = get_trimmed_datasets(src_datasets, t_len, tokenizer, src=True)
-    tgt_ids, tgt_segment_ids, tgt_masks = get_trimmed_datasets(tgt_datasets, s_len, tokenizer, src=False)
+    src_ids, src_segment_ids, src_masks = get_trimmed_datasets(src_datasets, t_len, tokenizer, 105)
+    tgt_ids, tgt_segment_ids, tgt_masks = get_trimmed_datasets(tgt_datasets, s_len, tokenizer, 105)
     # data = data_util.TensorDataset(src_ids, src_segment_ids, src_masks, tgt_ids, tgt_segment_ids, tgt_masks)
     data = data_util.TensorDataset(src_ids, tgt_ids)
     torch.save(data, filename)
